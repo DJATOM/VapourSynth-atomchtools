@@ -9,11 +9,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.8
+__version__ = 0.81
 
 '''
 Atomch Tools
-Version 0.8 from 16.02.2020
+Version 0.81 from 17.02.2020
 
 Functions:
     ApplyCredits
@@ -262,8 +262,11 @@ def eedi3Scale(input: VideoNode, uheight: int = 720, arx: int = None, ary: int =
     if not isinstance(input, VideoNode):
         raise TypeError(f'{funcName}: "input" must be a clip!')
     def nnedi3_superclip(clip, nnedi3Mode='cpu', device=-1, pscrn=1, dw=False):
-        if dw:
-            nnedi3Mode = 'opencl'
+        if dw and nnedi3Mode != 'opencl':
+            step1 = core.nnedi3.nnedi3(clip, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
+            rot1  = core.std.Transpose(step1)
+            step2 = core.nnedi3.nnedi3(rot1, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
+            return core.std.Transpose(step2)
         if nnedi3Mode == 'opencl':
             return core.nnedi3cl.NNEDI3CL(clip, field=1, dh=True, dw=dw, nsize=0, nns=4, pscrn=pscrn, device=device)
         elif nnedi3Mode == 'znedi3':
