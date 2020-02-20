@@ -1,4 +1,4 @@
-from vapoursynth import core, VideoNode, YUV, GRAY
+from vapoursynth import core, VideoNode, YUV, GRAY # pylint: disable=no-name-in-module
 import collections
 import cooldegrain
 import descale as dsc
@@ -9,11 +9,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.81
+__version__ = 0.82
 
 '''
 Atomch Tools
-Version 0.81 from 17.02.2020
+Version 0.82 from 20.02.2020
 
 Functions:
     ApplyCredits
@@ -67,16 +67,16 @@ def CopyColors(clip: VideoNode, colors: VideoNode) -> VideoNode:
     assert clip.num_frames == colors.num_frames, TypeError(f'{funcName}: input clips are not even! clip: {clip.num_frames}, colors: {colors.num_frames}!')
     return core.std.ShufflePlanes([clip, colors], planes=[0, 1, 2], colorfamily=colors.format.color_family)
 
-def ApplyImageMask(source: VideoNode, replacement: VideoNode, imageMask: str = None, lumaOnly: bool = True, binarizeThr: int = 128, preview: bool = False) -> VideoNode:
+def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = None, luma_only: bool = True, binarize_thr: int = 128, preview: bool = False, first_plane_mask: bool = True) -> VideoNode:
     ''' Applies custom (hand-drawn) image as static mask for two clips '''
     funcName = 'ApplyImageMask'
     if not isinstance(source, VideoNode):
         raise TypeError(f'{funcName}: "source" must be a clip!')
     if not isinstance(replacement, VideoNode):
         raise TypeError(f'{funcName}: "replacement" must be a clip!')
-    filemask = core.imwrif.Read(imageMask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
+    filemask = core.imwrif.Read(image_mask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
     NumPlanes = source.format.num_planes
-    if lumaOnly is True or NumPlanes == 1:
+    if luma_only is True or NumPlanes == 1:
         planes = [0]
         filemask = core.std.ShufflePlanes(filemask, 0, GRAY)
         source_ = core.std.ShufflePlanes(source, 0, GRAY)
@@ -86,11 +86,11 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, imageMask: str = N
         source_ = source
         replacement_ = replacement
     assert source.num_frames == replacement.num_frames, TypeError(f'{funcName}: input clips are not even! source: {source.num_frames}, replacement: {replacement.num_frames}!')
-    mask = core.std.Binarize(filemask, binarizeThr).std.Maximum().std.Deflate()
+    mask = core.std.Binarize(filemask, binarize_thr).std.Maximum().std.Deflate()
     if preview:
         replacement_ = core.std.Merge(mask, replacement_, 0.5)
-    masked = core.std.MaskedMerge(source_, replacement_, mask, planes)
-    if lumaOnly is True and NumPlanes > 1:
+    masked = core.std.MaskedMerge(source_, replacement_, mask, planes, first_plane_mask)
+    if luma_only is True and NumPlanes > 1:
         masked = core.std.ShufflePlanes([masked, source], planes=[0, 1, 2], colorfamily=source.format.color_family)
     return masked
 
@@ -225,7 +225,7 @@ def DiffRescaleMask(clip: VideoNode, descale_h: int = 720, descale_w: int = None
     mask = mask.std.Prewitt().std.Maximum().std.Maximum().std.Deflate()
     return mask
 
-def DiffOn2FramesMask(clip: VideoNode, first: int = 0, second: int = 0, thr: int = 30, LumaOnly: bool = True) -> VideoNode:
+def DiffOn2FramesMask(clip: VideoNode, first: int = 0, second: int = 0, thr: int = 30, luma_only: bool = True) -> VideoNode:
     ''' Helper for building masks using 2 frames of clip '''
     funcName = 'DiffOn2FramesMask'
     if not isinstance(clip, VideoNode):
@@ -234,7 +234,7 @@ def DiffOn2FramesMask(clip: VideoNode, first: int = 0, second: int = 0, thr: int
     bits = clip.format.bits_per_sample
     maxvalue = (1 << bits) - 1
     thr = thr * maxvalue // 0xFF
-    if LumaOnly:
+    if luma_only:
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
         planes = [0]
     frame1 = clip[first]
@@ -301,16 +301,16 @@ def eedi3Scale(input: VideoNode, uheight: int = 720, arx: int = None, ary: int =
     V = core.resize.Spline36(nnedi3_superclip(V, device=chromaDevice, pscrn=pscrn, dw=True), cw, cy, src_left=-0.25, src_top=-0.5)
     return core.std.ShufflePlanes([Y, U, V], [0, 0, 0], YUV)
 
-def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, myFunc: callable = None) -> VideoNode:
+def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: callable = None) -> VideoNode:
     ''' Yet another wrapper for feeding many manual static masks at once. Uses modified rf.Replace function '''
     funcName = 'RfsMany'
     intervals = []
     clips = []
-    myFuncArgs = {}
+    my_func_args = {}
     assert clip.num_frames == source.num_frames, TypeError(f'{funcName}: input clips are not even! clip: {clip.num_frames}, source: {source.num_frames}!')
     if mappings == None:
         raise ValueError('Not enough parameters.')
-    if myFunc != None and not callable(myFunc):
+    if my_func != None and not callable(my_func):
         raise ValueError('Passed function is not callable.')
     if not isinstance(mappings, list):
         raise ValueError('Mappings holds non-list data.')
@@ -318,50 +318,50 @@ def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, myFunc: c
         if not isinstance(mapping, list):
             raise ValueError('One of mappings iterations holds non-list data.')
         if len(mapping) == 4:
-            start, end, argVals, myCustFunc = [value for value in mapping]
-            if not callable(myCustFunc):
+            start, end, arg_vals, my_cust_func = [value for value in mapping]
+            if not callable(my_cust_func):
                 raise ValueError('Passed custom function is not callable.')
-            justReplace = False
+            just_replace = False
         elif len(mapping) == 3:
-            start, end, argVals = [value for value in mapping]
-            myCustFunc = False
-            justReplace = False
+            start, end, arg_vals = [value for value in mapping]
+            my_cust_func = False
+            just_replace = False
         elif len(mapping) == 2:
             start, end = [value for value in mapping]
-            myCustFunc = False
-            justReplace = True
+            my_cust_func = False
+            just_replace = True
         else:
             raise ValueError('One of mappings lacks some values.')
-        if myFunc is None and myCustFunc is False and justReplace is False:
+        if my_func is None and my_cust_func is False and just_replace is False:
             raise ValueError('You should provide at least [start, end] positions for just replacement.')
         try:
-            if myCustFunc:
-                argNames = inspect.getargspec(myCustFunc)[0]
-            elif justReplace:
-                argNames = []
+            if my_cust_func:
+                arg_names = inspect.getargspec(my_cust_func)[0]
+            elif just_replace:
+                arg_names = []
             else:
-                argNames = inspect.getargspec(myFunc)[0]
+                arg_names = inspect.getargspec(my_func)[0]
         except:
             raise ValueError('Something went wrong with passed function.')
-        if not justReplace:
-            if not isinstance(argVals, list):
-                argVals = [argVals]
-            argVals = [clip, source] + argVals
-            argPos = 0
-            for argName in argNames:
-                if len(argVals) > argPos:
-                    myFuncArgs[argName] = argVals[argPos]
-                argPos += 1
-            if myCustFunc:
-                clips.append(myCustFunc(**myFuncArgs))
+        if not just_replace:
+            if not isinstance(arg_vals, list):
+                arg_vals = [arg_vals]
+            arg_vals = [clip, source] + arg_vals
+            arg_pos = 0
+            for arg_name in arg_names:
+                if len(arg_vals) > arg_pos:
+                    my_func_args[arg_name] = arg_vals[arg_pos]
+                arg_pos += 1
+            if my_cust_func:
+                clips.append(my_cust_func(**my_func_args))
             else:
-                clips.append(myFunc(**myFuncArgs))
+                clips.append(my_func(**my_func_args))
         else:
             clips.append(source)
         intervals.append(f'[{start}:{end}]')
     return core.rfmod.Replace(clip, clips, intervals)
 
-def rfs(clipa: VideoNode, clipb: VideoNode, mappings: list = None) -> VideoNode:
+def rfs(clipa: VideoNode, clipb: VideoNode, mappings: Sequence = None) -> VideoNode:
     ''' Basically a wrapper for std.Trim and std.Splice that recreates the functionality of
         AviSynth's ReplaceFramesSimple (http://avisynth.nl/index.php/RemapFrames)
         that was part of the plugin RemapFrames by James D. Lin 
@@ -372,7 +372,7 @@ def rfs(clipa: VideoNode, clipb: VideoNode, mappings: list = None) -> VideoNode:
         raise TypeError('RFS: "clipb" must be a clip!')
     if clipa.format.id != clipb.format.id:
         raise TypeError('RFS: "clipa" and "clipb" must have the same format!')
-    if mappings is not None and not isinstance(mappings, list):
+    if mappings is not None and not isinstance(mappings, Sequence):
         raise TypeError('RFS: "mappings" must be a list!')
     if mappings is None:
         mappings = []
@@ -400,7 +400,7 @@ def rfs(clipa: VideoNode, clipb: VideoNode, mappings: list = None) -> VideoNode:
         out = temp
     return out
 
-def retinex_edgemask(src: VideoNode, sigma=1, draft=False, openCL: bool = False, device: int = -1) -> VideoNode:
+def retinex_edgemask(src: VideoNode, sigma: int = 1, draft: bool = False, opencl: bool = False, device: int = -1) -> VideoNode:
     '''
     Use retinex to greatly improve the accuracy of the edge detection in dark scenes.
     draft=True is a lot faster, albeit less accurate
@@ -412,8 +412,8 @@ def retinex_edgemask(src: VideoNode, sigma=1, draft=False, openCL: bool = False,
         ret = core.std.Expr(luma, 'x 65535 / sqrt 65535 *')
     else:
         ret = core.retinex.MSRCP(luma, sigma=[50, 200, 350], upper_thr=0.005)
-    tcannyClip = core.tcanny.TCannyCL(ret, mode=1, sigma=sigma, device=device) if openCL else core.tcanny.TCanny(ret, mode=1, sigma=sigma)
-    mask = core.std.Expr([kirsch(luma), tcannyClip.std.Minimum(coordinates=[1, 0, 1, 0, 0, 1, 0, 1])], 'x y +')
+    tcanny_clip = core.tcanny.TCannyCL(ret, mode=1, sigma=sigma, device=device) if opencl else core.tcanny.TCanny(ret, mode=1, sigma=sigma)
+    mask = core.std.Expr([kirsch(luma), tcanny_clip.std.Minimum(coordinates=[1, 0, 1, 0, 0, 1, 0, 1])], 'x y +')
     return mask
 
 def kirsch(src: VideoNode) -> VideoNode:
