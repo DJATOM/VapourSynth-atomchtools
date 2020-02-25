@@ -3,6 +3,7 @@ import collections
 import cooldegrain
 import descale as dsc
 import inspect
+from typing import Union
 
 try:
     from collections.abc import Sequence
@@ -13,7 +14,7 @@ __version__ = 0.83
 
 '''
 Atomch Tools
-Version 0.83 from 25.02.2020
+Version 0.84 from 25.02.2020
 
 Functions:
     ApplyCredits
@@ -36,7 +37,7 @@ Functions:
     m4
 '''
 
-def ApplyCredits(credits: VideoNode, nc: VideoNode, fixed_nc: VideoNode, lumaOnly: bool = True) -> VideoNode:
+def ApplyCredits(credits: VideoNode, nc: VideoNode, fixed_nc: VideoNode, luma_only: bool = True) -> VideoNode:
     ''' Convenient helper for applying credits on processed creditless videos (OP/ED) '''
     funcName = 'ApplyCredits'
     if not isinstance(credits, VideoNode):
@@ -46,14 +47,14 @@ def ApplyCredits(credits: VideoNode, nc: VideoNode, fixed_nc: VideoNode, lumaOnl
     if not isinstance(fixed_nc, VideoNode):
         raise TypeError(f'{funcName}: "fixed_nc" must be a clip!')
     assert credits.num_frames == nc.num_frames == fixed_nc.num_frames, TypeError(f'{funcName}: input clips are not even! credits: {credits.num_frames}, nc - {nc.num_frames}, fixed_nc - {fixed_nc.num_frames}!')
-    if lumaOnly is True:
+    if luma_only is True:
         credits_ = core.std.ShufflePlanes(credits, 0, GRAY)
         nc = core.std.ShufflePlanes(nc, 0, GRAY)
         fixed_nc = core.std.ShufflePlanes(fixed_nc, 0, GRAY)
     else:
         credits_ = credits
     averaged = core.std.Expr([credits_, nc, fixed_nc], ['x y - z +'])
-    if lumaOnly is True:
+    if luma_only is True:
         averaged = core.std.ShufflePlanes([averaged, credits], planes=[0, 1, 2], colorfamily=credits.format.color_family)
     return averaged
 
@@ -115,11 +116,19 @@ def Tp7DebandMask(clip: VideoNode, thr: int = 10, scale: int = 1, rg: bool = Tru
     mask_yuv_on_y = core.std.Expr([core.std.ShufflePlanes(mask, 0, GRAY), mask_uv], ['x y +']).std.Maximum()
     return mask_yuv_on_y
 
-def JensenLineMask(clip: VideoNode, thr_y: int = 7, thr_u: int = 8, thr_v: int = 8, scale: int = 1, rg: bool = True) -> VideoNode:
+def JensenLineMask(clip: VideoNode, thr: Union[int, Sequence] = (7, 8, 8), scale: int = 1, rg: bool = True) -> VideoNode:
     ''' A modified one to Jensen's needs '''
     funcName = 'JensenLineMask'
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{funcName}: "clip" must be a clip!')
+    if len(thr) == 1:
+        thr_y, thr_u, thr_v = [thr] * 3
+    elif len(thr) == 2:
+        thr_y, [thr_u, thr_v] = thr[0], [thr[1]] * 2
+    elif len(thr) == 3:
+        thr_y, thr_u, thr_v = thr
+    else:
+        raise ValueError(f'{funcName}: "thr" got wrong set of values!')
     mask = core.std.Prewitt(clip, [0,1,2], scale)
     if rg is True:
         mask = mask.rgvs.RemoveGrain(3).rgvs.RemoveGrain(4)
