@@ -9,11 +9,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.82
+__version__ = 0.83
 
 '''
 Atomch Tools
-Version 0.82 from 20.02.2020
+Version 0.83 from 25.02.2020
 
 Functions:
     ApplyCredits
@@ -74,7 +74,12 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = 
         raise TypeError(f'{funcName}: "source" must be a clip!')
     if not isinstance(replacement, VideoNode):
         raise TypeError(f'{funcName}: "replacement" must be a clip!')
-    filemask = core.imwrif.Read(image_mask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
+    if not isinstance(image_mask, VideoNode):
+        filemask = core.imwrif.Read(image_mask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
+    elif isinstance(image_mask, VideoNode):
+        filemask = image_mask
+    else:
+        raise TypeError(f'{funcName}: "image_mask" has unsupported type!')
     NumPlanes = source.format.num_planes
     if luma_only is True or NumPlanes == 1:
         planes = [0]
