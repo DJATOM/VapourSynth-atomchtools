@@ -10,11 +10,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.83
+__version__ = 0.85
 
 '''
 Atomch Tools
-Version 0.84 from 25.02.2020
+Version 0.85 from 29.03.2020
 
 Functions:
     ApplyCredits
@@ -68,7 +68,7 @@ def CopyColors(clip: VideoNode, colors: VideoNode) -> VideoNode:
     assert clip.num_frames == colors.num_frames, TypeError(f'{funcName}: input clips are not even! clip: {clip.num_frames}, colors: {colors.num_frames}!')
     return core.std.ShufflePlanes([clip, colors], planes=[0, 1, 2], colorfamily=colors.format.color_family)
 
-def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = None, luma_only: bool = True, binarize_thr: int = 128, preview: bool = False, first_plane_mask: bool = True) -> VideoNode:
+def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = None, luma_only: bool = True, binarize_threshold: int = 17, scaled_binarize: bool = False, preview: bool = False, first_plane_mask: bool = True) -> VideoNode:
     ''' Applies custom (hand-drawn) image as static mask for two clips '''
     funcName = 'ApplyImageMask'
     if not isinstance(source, VideoNode):
@@ -76,7 +76,8 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = 
     if not isinstance(replacement, VideoNode):
         raise TypeError(f'{funcName}: "replacement" must be a clip!')
     if not isinstance(image_mask, VideoNode):
-        filemask = core.imwrif.Read(image_mask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
+        MaskReader = core.imwrif.Read if hasattr(core, 'imwrif') else core.imwri.Read
+        filemask = MaskReader(image_mask).resize.Point(format=source.format.id, matrix_s="709", chromaloc_s="top_left")
     elif isinstance(image_mask, VideoNode):
         filemask = image_mask
     else:
@@ -92,10 +93,13 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = 
         source_ = source
         replacement_ = replacement
     assert source.num_frames == replacement.num_frames, TypeError(f'{funcName}: input clips are not even! source: {source.num_frames}, replacement: {replacement.num_frames}!')
-    mask = core.std.Binarize(filemask, binarize_thr).std.Maximum().std.Deflate()
+    if not scaled_binarize:
+        max_pixel_value = (256 << (source.format.bits_per_sample - 8)) - 1
+        binarize_threshold = min(binarize_threshold << (source.format.bits_per_sample - 8), max_pixel_value)
+    filemask = core.std.Expr(filemask, f'x {binarize_threshold} < 0 x ?').std.Maximum().std.Deflate()
     if preview:
-        replacement_ = core.std.Merge(mask, replacement_, 0.5)
-    masked = core.std.MaskedMerge(source_, replacement_, mask, planes, first_plane_mask)
+        replacement_ = core.std.Merge(filemask, replacement_, 0.5)
+    masked = core.std.MaskedMerge(source_, replacement_, filemask, planes, first_plane_mask)
     if luma_only is True and NumPlanes > 1:
         masked = core.std.ShufflePlanes([masked, source], planes=[0, 1, 2], colorfamily=source.format.color_family)
     return masked
