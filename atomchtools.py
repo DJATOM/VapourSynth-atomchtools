@@ -10,11 +10,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.85
+__version__ = 0.86
 
 '''
 Atomch Tools
-Version 0.85 from 29.03.2020
+Version 0.86 from 09.04.2020
 
 Functions:
     ApplyCredits
@@ -218,7 +218,7 @@ def DiffCreditlessMask(titles: VideoNode, nc: VideoNode) -> VideoNode:
     test = core.rgvs.RemoveGrain(test, 4).std.Expr('x 30 > 255 x ?')
     return test
 
-def DiffRescaleMask(clip: VideoNode, descale_h: int = 720, descale_w: int = None, kernel: str = 'bicubic', b=1/3, c=1/3, mthr: int = 55) -> VideoNode:
+def DiffRescaleMask(clip: VideoNode, descale_h: int = 720, descale_w: int = None, kernel: str = 'bicubic', b=1/3, c=1/3, taps: int = 3, mode: str = "approx", mthr: int = 55, upscale_thrs: bool = True) -> VideoNode:
     ''' Builds mask from difference of original and re-upscales clips '''
     funcName = 'DiffRescaleMask'
     def str2kernel(kernel: str = 'bicubic'):
@@ -226,21 +226,41 @@ def DiffRescaleMask(clip: VideoNode, descale_h: int = 720, descale_w: int = None
             'bicubic': core.resize.Bicubic,
             'bilinear': core.resize.Bilinear,
             'spline16': core.resize.Spline16,
-            'spline36': core.resize.Spline36
+            'spline36': core.resize.Spline36,
+            'lanczos': core.resize.Lanczos
         }
         return kernels[kernel]
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{funcName}: "clip" must be a clip!')
     descale_w = m4((clip.width * descale_h) / clip.height) if descale_w == None else descale_w
+    bits = clip.format.bits_per_sample
+    maxvalue = (1 << bits) - 1
+    half_pixel = 128 * maxvalue // 0xFF
     dclip = dsc.Descale(clip, descale_w, descale_h, kernel=kernel, b=b, c=c)
     upscaler = str2kernel(kernel)
-    uclip = upscaler(dclip, clip.width, clip.height, filter_param_a=b, filter_param_b=c)
+    uclip = upscaler(dclip, clip.width, clip.height, filter_param_a=b if kernel != "lanczos" else taps, filter_param_b=c)
     uclip = core.std.ShufflePlanes(uclip, 0, GRAY)
     clip = core.std.ShufflePlanes(clip, 0, GRAY)
     diff = core.std.MakeDiff(clip, uclip)
-    mask = diff.rgvs.RemoveGrain(2).rgvs.RemoveGrain(2).hist.Luma()
-    mask = mask.std.Expr(f'x {mthr} < 0 x ?')
-    mask = mask.std.Prewitt().std.Maximum().std.Maximum().std.Deflate()
+    if mode == "approx":
+        mask = diff.rgvs.RemoveGrain(2).rgvs.RemoveGrain(2).hist.Luma()
+        mask = mask.std.Expr(f'x {mthr} < 0 x ?')
+        mask = mask.std.Prewitt().std.Maximum().std.Maximum().std.Deflate()
+    elif mode == "precise":
+        if len(mthr) == 3:
+            mult_1pass, thr, mult_2pass = mthr
+        elif len(mthr) == 2:
+            mult_1pass, thr = mthr
+            mult_2pass = 4
+        elif len(mthr) == 1 and mthr != 55: # not default value specified
+            mult_1pass, thr, mult_2pass = 10, mthr, 4
+        else:
+            mult_1pass, thr, mult_2pass = 10, 32, 4
+        if upscale_thrs:
+            mult_1pass, thr, mult_2pass = mult_1pass * maxvalue // 0xFF, thr * maxvalue // 0xFF, mult_2pass * maxvalue // 0xFF
+        mask = core.std.Expr(diff, f'x {half_pixel} - {mult_1pass} *').std.Maximum().std.Expr(f'x {thr} < 0 x {mult_2pass} * ?').std.Inflate()
+    else:
+        raise ValueError(f'{funcName}: invalid mode.')
     return mask
 
 def DiffOn2FramesMask(clip: VideoNode, first: int = 0, second: int = 0, thr: int = 30, luma_only: bool = True) -> VideoNode:
