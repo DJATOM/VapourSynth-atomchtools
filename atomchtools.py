@@ -125,11 +125,11 @@ def JensenLineMask(clip: VideoNode, thr: Union[int, Sequence] = (7, 8, 8), scale
     funcName = 'JensenLineMask'
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{funcName}: "clip" must be a clip!')
-    if len(thr) == 1:
+    if len(str(thr)) == 1:
         thr_y, thr_u, thr_v = [thr] * 3
-    elif len(thr) == 2:
+    elif len(str(thr)) == 2:
         thr_y, [thr_u, thr_v] = thr[0], [thr[1]] * 2
-    elif len(thr) == 3:
+    elif len(str(thr)) == 3:
         thr_y, thr_u, thr_v = thr
     else:
         raise ValueError(f'{funcName}: "thr" got wrong set of values!')
