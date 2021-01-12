@@ -163,7 +163,7 @@ def ApplyF3kdbGrain(clip: VideoNode, mask: VideoNode = None, sigma: int = 25, tb
         repairmask = mask.fmtc.bitdepth(bits=16)
     pf = core.dfttest.DFTTest(clip16, sigma=sigma, tbsize=tbsize, planes=[0])
     filtered = cooldegrain.CoolDegrain(clip, tr=1, thsad=thsad, thsadc=thsadc, bits=16, blksize=8, overlap=4, pf=pf)
-    filtered = core.f3kdb.Deband(filtered, dither_algo=3, y=detect_y, cb=detect_c, cr=detect_c, grainy=grain_y, grainc=grain_c, dynamic_grain=dyn_grain, keep_tv_range=tv_range, output_depth=16)
+    filtered = core.f3kdb.Deband(filtered, y=detect_y, cb=detect_c, cr=detect_c, grainy=grain_y, grainc=grain_c, dynamic_grain=dyn_grain, keep_tv_range=tv_range, output_depth=16)
     filtered = core.std.MaskedMerge(filtered, clip16, repairmask, planes=[0,1,2], first_plane=True)
     return filtered
 
