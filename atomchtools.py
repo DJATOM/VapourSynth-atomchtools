@@ -13,11 +13,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.86
+__version__ = 0.88
 
 '''
 Atomch Tools
-Version 0.86 from 09.04.2020
+Version 0.88 from 16.03.2021
 
 Functions:
     ApplyCredits
