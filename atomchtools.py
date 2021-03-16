@@ -5,6 +5,8 @@ import descale as dsc
 import havsfunc as haf
 import inspect
 from typing import Union
+from pathlib import Path
+import time
 
 try:
     from collections.abc import Sequence
@@ -360,6 +362,54 @@ def eedi3nnedi3Scale(input: VideoNode, width: int = 1280, height: int = 720, eed
         return core.std.ShufflePlanes([Y, U, V], [0, 0, 0], YUV)
     else:
         return Y
+
+def TIVTC_VFR(source: VideoNode, clip2: VideoNode = None, tfmIn: Union[Path, str] = "matches.txt", tdecIn: Union[Path, str] = "metrics.txt", mkvOut: Union[Path, str] = "timecodes.txt", tfm_args: dict = dict(), tdecimate_args: dict = dict()) -> VideoNode:
+    '''
+    Convenient wrapper on tivtc to perform automatic vfr decimation with one function.
+    '''
+    analyze = True
+
+    if Path(tfmIn).exists() and Path(tdecIn).exists():
+        analyze = False
+
+    if clip2:
+        tfm_args.update(dict(clip2=clip2))
+
+    if analyze:
+        tfm_pass1_args = tfm_args.copy()
+        tdecimate_pass1_args = tdecimate_args.copy()
+        tfm_pass1_args.update(dict(output=str(tfmIn)))
+        tdecimate_pass1_args.update(dict(output=str(tdecIn), mode=4))
+        tmpnode = core.tivtc.TFM(source, **tfm_pass1_args)
+        tmpnode = core.tivtc.TDecimate(tmpnode, **tdecimate_pass1_args)
+
+        try:
+            from tkinter import Tk, HORIZONTAL
+            from tkinter.ttk import Progressbar, Label
+            root = Tk()
+            Label(root, text="Analyzing frames...").pack(padx = 10, pady = 5)
+            progress = Progressbar(root, orient = HORIZONTAL, length = tmpnode.num_frames, mode = 'determinate')
+            progress.pack(padx = 10, pady = 5)
+            for i in range(tmpnode.num_frames):
+                tmpnode.get_frame(i)
+                progress['value'] = i
+                root.update()
+            root.destroy()
+        except:
+            for i in range(tmpnode.num_frames):
+                tmpnode.get_frame(i)
+                print(f"Analyzing frame #{i}...", end='\r')
+
+        del tmpnode
+        time.sleep(0.5) # let it write logs
+
+    tfm_args.update(dict(input=str(tfmIn)))
+    tdecimate_args.update(dict(input=str(tdecIn), tfmIn=str(tfmIn), mkvOut=str(mkvOut), mode=5, hybrid=2, vfrDec=1))
+
+    output = core.tivtc.TFM(source, **tfm_args)
+    output = core.tivtc.TDecimate(output,  **tdecimate_args)
+
+    return output
 
 def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: callable = None) -> VideoNode:
     ''' Yet another wrapper for feeding many manual static masks at once. Uses modified rf.Replace function '''
