@@ -184,6 +184,13 @@ def ProcessRegion(clip: VideoNode, filtering: callable, left: int = 0, right: in
         return core.std.MaskedMerge(clip, padded, binaryMask)
     return padded
 
+def MergeRegion(source: VideoNode, replacement: VideoNode, mask: VideoNode, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0) -> VideoNode:
+    region = core.std.Crop(replacement, left, right, top, bottom)
+    padded = core.std.AddBorders(region, left, right, top, bottom)
+    binaryMask = core.std.Binarize(padded, threshold=1)
+    finalMask = core.std.Expr([mask, binaryMask], 'x y min')
+    return core.std.MaskedMerge(clip, padded, finalMask)
+
 def MergeHalf(source: VideoNode, filtered: VideoNode, right: bool = True) -> VideoNode:
     ''' Applies filter only to left or right half of frame '''
     funcName = 'MergeHalf'
