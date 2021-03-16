@@ -302,50 +302,57 @@ def ApplyMaskOnLuma(source: VideoNode, filtered: VideoNode, mask: VideoNode) -> 
     result = core.std.ShufflePlanes([masked, source, source], planes=[0, 1, 2], colorfamily=source.format.color_family)
     return result
 
-def eedi3Scale(input: VideoNode, uheight: int = 720, arx: int = None, ary: int = None, eedi3Mode: str = 'cpu', nnedi3Mode: str = 'cpu', lumaDevice: int = -1, chromaDevice: int = -1, pscrn: int = 1, alpha: float = 0.2, beta: float = 0.25, gamma: float = 1000.0) -> VideoNode:
+def eedi3nnedi3Scale(input: VideoNode, width: int = 1280, height: int = 720, eedi3_mode: str = 'cpu', nnedi3_mode: str = 'cpu', device: int = -1, pscrn: int = 1, alpha: float = 0.2, beta: float = 0.25, gamma: float = 1000.0) -> VideoNode:
     ''' Some eedi3-based upscale function. Luma will be upscaled with eedi3+nnedi3 filters, chroma with nnedi3 '''
-    funcName = 'eedi3Scale'
+    funcName = 'eedi3nnedi3Scale'
     if not isinstance(input, VideoNode):
         raise TypeError(f'{funcName}: "input" must be a clip!')
     def nnedi3_superclip(clip, nnedi3Mode='cpu', device=-1, pscrn=1, dw=False):
         if dw and nnedi3Mode != 'opencl':
-            step1 = core.nnedi3.nnedi3(clip, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
-            rot1  = core.std.Transpose(step1)
-            step2 = core.nnedi3.nnedi3(rot1, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
-            return core.std.Transpose(step2)
+            step   = core.nnedi3.nnedi3(clip, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
+            rotate = core.std.Transpose(step)
+            step  = core.nnedi3.nnedi3(rotate, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
+            return core.std.Transpose(step)
         if nnedi3Mode == 'opencl':
             return core.nnedi3cl.NNEDI3CL(clip, field=1, dh=True, dw=dw, nsize=0, nns=4, pscrn=pscrn, device=device)
         elif nnedi3Mode == 'znedi3':
             return core.znedi3.nnedi3(clip, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
         else:
             return core.nnedi3.nnedi3(clip, field=1, dh=True, nsize=0, nns=4, pscrn=pscrn)
-    def eedi3_instance(clip, eedi3Mode='cpu', nnedi3Mode='cpu', device=-1, pscrn=1, alpha=0.2, beta=0.25, gamma=1000.0):
-        if eedi3Mode == 'opencl':
-            return core.eedi3m.EEDI3CL(clip, field=1, dh=True, alpha=alpha, beta=beta, gamma=gamma, vcheck=3, sclip=nnedi3_superclip(clip, nnedi3Mode, device, pscrn), device=device)
+    def eedi3_instance(clip, eedi3_mode='cpu', nnedi3_mode='cpu', device=-1, pscrn=1, alpha=0.2, beta=0.25, gamma=1000.0):
+        if eedi3_mode == 'opencl':
+            return core.eedi3m.EEDI3CL(clip, field=1, dh=True, alpha=alpha, beta=beta, gamma=gamma, vcheck=3, sclip=nnedi3_superclip(clip, nnedi3_mode, device, pscrn), device=device)
         else:
-            return core.eedi3m.EEDI3(clip, field=1, dh=True, alpha=alpha, beta=beta, gamma=gamma, vcheck=3, sclip=nnedi3_superclip(clip, nnedi3Mode, device, pscrn))
+            return core.eedi3m.EEDI3(clip, field=1, dh=True, alpha=alpha, beta=beta, gamma=gamma, vcheck=3, sclip=nnedi3_superclip(clip, nnedi3_mode, device, pscrn))
     w = input.width
     h = input.height
+    if isinstance(device, int):
+        luma_device, chroma_device = device, device
+    elif len(device) == 2:
+        luma_device, chroma_device = device
+    else:
+        raise ValueError(f'{funcName}: "device" must be single int value or tuple with 2 int values!')
     ux = w * 2
     uy = h * 2
-    dy = uheight
-    if arx and ary:
-        dx = m4(dy / ary * arx)
-    else:
-        dx = m4(dy / h * w)
-    cw = dx >> input.format.subsampling_w
-    cy = dy >> input.format.subsampling_h
+    if input.format.num_planes == 3:
+        cw = width >> input.format.subsampling_w
+        cy = height >> input.format.subsampling_h
+
     Y = core.std.ShufflePlanes(input, 0, GRAY)
-    U = core.std.ShufflePlanes(input, 1, GRAY)
-    V = core.std.ShufflePlanes(input, 2, GRAY)
-    Y = eedi3_instance(Y, eedi3Mode, nnedi3Mode, lumaDevice, pscrn, alpha, beta, gamma)
+    if input.format.num_planes == 3:
+        U = core.std.ShufflePlanes(input, 1, GRAY)
+        V = core.std.ShufflePlanes(input, 2, GRAY)
+    Y = eedi3_instance(Y, eedi3_mode, nnedi3_mode, luma_device, pscrn, alpha, beta, gamma)
     Y = core.std.Transpose(Y)
-    Y = eedi3_instance(Y, eedi3Mode, nnedi3Mode, lumaDevice, pscrn, alpha, beta, gamma)
+    Y = eedi3_instance(Y, eedi3_mode, nnedi3_mode, luma_device, pscrn, alpha, beta, gamma)
     Y = core.std.Transpose(Y)
-    Y = core.resize.Spline36(Y, dx, dy, src_left=-0.5, src_top=-0.5, src_width=ux, src_height=uy)
-    U = core.resize.Spline36(nnedi3_superclip(U, device=chromaDevice, pscrn=pscrn, dw=True), cw, cy, src_left=-0.25, src_top=-0.5)
-    V = core.resize.Spline36(nnedi3_superclip(V, device=chromaDevice, pscrn=pscrn, dw=True), cw, cy, src_left=-0.25, src_top=-0.5)
-    return core.std.ShufflePlanes([Y, U, V], [0, 0, 0], YUV)
+    Y = core.resize.Spline36(Y, width, height, src_left=-0.5, src_top=-0.5, src_width=ux, src_height=uy)
+    if input.format.num_planes == 3:
+        U = core.resize.Spline36(nnedi3_superclip(U, device=chroma_device, pscrn=pscrn, dw=True), cw, cy, src_left=-0.25, src_top=-0.5)
+        V = core.resize.Spline36(nnedi3_superclip(V, device=chroma_device, pscrn=pscrn, dw=True), cw, cy, src_left=-0.25, src_top=-0.5)
+        return core.std.ShufflePlanes([Y, U, V], [0, 0, 0], YUV)
+    else:
+        return Y
 
 def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: callable = None) -> VideoNode:
     ''' Yet another wrapper for feeding many manual static masks at once. Uses modified rf.Replace function '''
