@@ -26,13 +26,16 @@ Functions:
     Tp7DebandMask
     JensenLineMask
     ApplyF3kdbGrain
+    ProcessRegion
+    MergeRegion
     MergeHalf
     MakeTestEncode
     DiffCreditlessMask
     DiffRescaleMask
     DiffOn2FramesMask
     ApplyMaskOnLuma
-    eedi3Scale
+    eedi3nnedi3Scale
+    TIVTC_VFR
     RfsMany
     rfs
     retinex_edgemask
