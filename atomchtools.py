@@ -424,7 +424,7 @@ def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: 
 def rfs(clipa: VideoNode, clipb: VideoNode, mappings: Sequence = None) -> VideoNode:
     ''' Basically a wrapper for std.Trim and std.Splice that recreates the functionality of
         AviSynth's ReplaceFramesSimple (http://avisynth.nl/index.php/RemapFrames)
-        that was part of the plugin RemapFrames by James D. Lin 
+        that was part of the plugin RemapFrames by James D. Lin
         Almost a copypaste from fvsfunc (some minor changes).'''
     if not isinstance(clipa, VideoNode):
         raise TypeError('RFS: "clipa" must be a clip!')
@@ -448,11 +448,11 @@ def rfs(clipa: VideoNode, clipb: VideoNode, mappings: Sequence = None) -> VideoN
         if start > end:
             raise ValueError('RFS: Start frame is bigger than end frame: [{} {}]'.format(start, end))
         if end >= clipa.num_frames or end >= clipb.num_frames:
-            raise ValueError('RFS: End frame too big, one of the clips has less frames: {}'.format(end)) 
+            raise ValueError('RFS: End frame too big, one of the clips has less frames: {}'.format(end))
 
     out = clipa
     for start, end in maps:
-        temp = clipb[start:end+1] 
+        temp = clipb[start:end+1]
         if start != 0:
             temp = out[:start] + temp
         if end < out.num_frames - 1:
