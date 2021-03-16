@@ -2,6 +2,7 @@ from vapoursynth import core, VideoNode, YUV, GRAY # pylint: disable=no-name-in-
 import collections
 import cooldegrain
 import descale as dsc
+import havsfunc as haf
 import inspect
 from typing import Union
 
@@ -68,7 +69,7 @@ def CopyColors(clip: VideoNode, colors: VideoNode) -> VideoNode:
     assert clip.num_frames == colors.num_frames, TypeError(f'{funcName}: input clips are not even! clip: {clip.num_frames}, colors: {colors.num_frames}!')
     return core.std.ShufflePlanes([clip, colors], planes=[0, 1, 2], colorfamily=colors.format.color_family)
 
-def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = None, luma_only: bool = True, binarize_threshold: int = 17, scaled_binarize: bool = False, preview: bool = False, first_plane_mask: bool = True) -> VideoNode:
+def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = None, luma_only: bool = True, binarize_threshold: int = 17, scaled_binarize: bool = False, preview: bool = False, first_plane_mask: bool = True, blur: bool = False) -> VideoNode:
     ''' Applies custom (hand-drawn) image as static mask for two clips '''
     funcName = 'ApplyImageMask'
     if not isinstance(source, VideoNode):
@@ -82,8 +83,8 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = 
         filemask = image_mask
     else:
         raise TypeError(f'{funcName}: "image_mask" has unsupported type!')
-    NumPlanes = source.format.num_planes
-    if luma_only is True or NumPlanes == 1:
+    mum_planes = source.format.num_planes
+    if luma_only is True or mum_planes == 1:
         planes = [0]
         filemask = core.std.ShufflePlanes(filemask, 0, GRAY)
         source_ = core.std.ShufflePlanes(source, 0, GRAY)
@@ -100,7 +101,11 @@ def ApplyImageMask(source: VideoNode, replacement: VideoNode, image_mask: str = 
     if preview:
         replacement_ = core.std.Merge(filemask, replacement_, 0.5)
     masked = core.std.MaskedMerge(source_, replacement_, filemask, planes, first_plane_mask)
-    if luma_only is True and NumPlanes > 1:
+    if blur:
+        filemask = filemask.std.Maximum().std.Inflate()
+        masked_blurry = haf.MinBlur(masked, 3)
+        masked = core.std.MaskedMerge(masked, masked_blurry, filemask, planes, first_plane_mask)
+    if luma_only is True and mum_planes > 1:
         masked = core.std.ShufflePlanes([masked, source], planes=[0, 1, 2], colorfamily=source.format.color_family)
     return masked
 
