@@ -13,11 +13,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.88
+__version__ = 0.89
 
 '''
 Atomch Tools
-Version 0.88 from 16.03.2021
+Version 0.89 from 27.04.2021
 
 Functions:
     ApplyCredits
@@ -370,15 +370,37 @@ def TIVTC_VFR(source: VideoNode, clip2: VideoNode = None, tfmIn: Union[Path, str
     '''
     Convenient wrapper on tivtc to perform automatic vfr decimation with one function.
     '''
+    def _resolve_folder_path(path: Path):
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+
     analyze = True
 
-    if Path(tfmIn).exists() and Path(tdecIn).exists():
+    if isinstance(tfmIn, (str, Path)):
+        tfmIn = Path(tfmIn).resolve()
+    else:
+        raise TypeError("TIVTC_VFR: tfmIn must be string or Path type.")
+
+    if isinstance(tdecIn, (str, Path)):
+        tdecIn = Path(tdecIn).resolve()
+    else:
+        raise TypeError("TIVTC_VFR: tdecIn must be string or Path type.")
+
+    if isinstance(mkvOut, (str, Path)):
+        mkvOut = Path(mkvOut).resolve()
+    else:
+        raise TypeError("TIVTC_VFR: mkvOut must be string or Path type.")
+
+    if tfmIn.exists() and tdecIn.exists():
         analyze = False
 
     if clip2:
         tfm_args.update(dict(clip2=clip2))
 
     if analyze:
+        _resolve_folder_path(tfmIn)
+        _resolve_folder_path(tdecIn)
+        _resolve_folder_path(mkvOut)
         tfm_pass1_args = tfm_args.copy()
         tdecimate_pass1_args = tdecimate_args.copy()
         tfm_pass1_args.update(dict(output=str(tfmIn)))
