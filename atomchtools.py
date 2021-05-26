@@ -1,4 +1,4 @@
-from vapoursynth import core, VideoNode, YUV, GRAY # pylint: disable=no-name-in-module
+from vapoursynth import core, VideoNode, YUV, GRAY, FLOAT # pylint: disable=no-name-in-module
 import collections
 import cooldegrain
 import descale as dsc
@@ -13,11 +13,11 @@ try:
 except AttributeError:
     from collections import Sequence
 
-__version__ = 0.89
+__version__ = 0.9
 
 '''
 Atomch Tools
-Version 0.89 from 27.04.2021
+Version 0.9 from 27.05.2021
 
 Functions:
     ApplyCredits
@@ -36,6 +36,7 @@ Functions:
     ApplyMaskOnLuma
     eedi3nnedi3Scale
     TIVTC_VFR
+    BM3DCUDA
     RfsMany
     rfs
     retinex_edgemask
@@ -435,6 +436,37 @@ def TIVTC_VFR(source: VideoNode, clip2: VideoNode = None, tfmIn: Union[Path, str
     output = core.tivtc.TDecimate(output,  **tdecimate_args)
 
     return output
+
+def BM3DCUDA(source: VideoNode, ref: VideoNode = None, sigma: int = 3, block_step: int = 8, bm_range: int = 9, radius: int = 0, ps_num: int = 2, ps_range: int = 3, chroma: bool = False, device_id: int = 0, fast: bool = False, filter_build: str = 'auto') -> VideoNode:
+    '''
+    Convenient wrapper on BM3DCUDA filter to perform automatic format conversions and automatically select available filter's build with one function.
+    '''
+    if not hasattr(core, 'bm3dcuda_rtc') and not hasattr(core, 'bm3dcuda'):
+        raise NameError("BM3DCUDA: no usable plugin found.")
+
+    if (filter_build == 'auto' and hasattr(core, 'bm3dcuda_rtc')) or filter_build == 'rtc':
+        bm3dFunc = core.bm3dcuda_rtc.BM3D
+    elif (filter_build == 'auto' and not hasattr(core, 'bm3dcuda_rtc')) or filter_build == 'generic':
+        bm3dFunc = core.bm3dcuda.BM3D
+    else:
+        raise ValueError("BM3DCUDA: \"filter_build\" should have one of those values: \"auto\", \"rtc\" or \"generic\".")
+
+    if source.format.sample_type != FLOAT:
+        convert_format = True
+        clip = core.resize.Point(source, format=core.register_format(source.format.color_family, FLOAT, 32, source.format.subsampling_w, source.format.subsampling_h).id)
+    else:
+        convert_format = False
+        clip = source
+
+    clip = bm3dFunc(clip, ref=ref, sigma=sigma, block_step=block_step, bm_range=bm_range, radius=radius, ps_num=ps_num, ps_range=ps_range, chroma=chroma, device_id=device_id, fast=fast)
+
+    if radius > 0:
+        clip = core.bm3d.VAggregate(clip, radius=radius, sample=1)
+
+    if convert_format:
+        clip = core.resize.Point(clip, format=source.format.id)
+
+    return clip
 
 def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: callable = None) -> VideoNode:
     '''
