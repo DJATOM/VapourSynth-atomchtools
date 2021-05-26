@@ -437,7 +437,9 @@ def TIVTC_VFR(source: VideoNode, clip2: VideoNode = None, tfmIn: Union[Path, str
     return output
 
 def RfsMany(clip: VideoNode, source: VideoNode, mappings: list = None, my_func: callable = None) -> VideoNode:
-    ''' Yet another wrapper for feeding many manual static masks at once. Uses modified rf.Replace function '''
+    '''
+    Yet another wrapper for feeding many manual static masks at once. Uses modified rf.Replace function.
+    '''
     funcName = 'RfsMany'
     intervals = []
     clips = []
